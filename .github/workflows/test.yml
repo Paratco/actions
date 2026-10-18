@@ -1,6 +1,6 @@
 name: Test
 
-# Smoke-tests the actions from this checkout against a throwaway MinIO.
+# Smoke-tests the actions from this checkout against a throwaway S3 server (adobe/s3mock).
 on:
   push:
     branches: [main]
@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 env:
-  S3_ENDPOINT: http://127.0.0.1:9000
+  S3_ENDPOINT: http://127.0.0.1:9090
   S3_BUCKET: test
-  S3_KEY: minioadmin
-  S3_SECRET: minioadmin
+  S3_KEY: test
+  S3_SECRET: test
 
 jobs:
   test:
@@ -21,17 +21,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # A service container cannot be given `server /data`, so start MinIO by hand.
-      - name: Start MinIO
+      # MinIO images now need a registry login; s3mock is S3-compatible (multipart included), accepts any
+      # credentials and creates the bucket from an env var.
+      - name: Start S3 server
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER="$S3_KEY" -e MINIO_ROOT_PASSWORD="$S3_SECRET" \
-            minio/minio server /data
-          for i in $(seq 1 30); do
-            curl -sf "$S3_ENDPOINT/minio/health/live" && break
+          docker run -d --name s3 -p 9090:9090 \
+            -e COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS="$S3_BUCKET" \
+            -e initialBuckets="$S3_BUCKET" \
+            adobe/s3mock
+          for i in $(seq 1 60); do
+            curl -sf "$S3_ENDPOINT/$S3_BUCKET?list-type=2" >/dev/null && exit 0
             sleep 1
           done
-          curl -sf --aws-sigv4 "aws:amz:us-east-1:s3" --user "$S3_KEY:$S3_SECRET" -X PUT "$S3_ENDPOINT/$S3_BUCKET"
+          docker logs s3
+          exit 1
 
       - name: Create test files
         run: |
