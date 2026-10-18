@@ -17,7 +17,8 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          # dist/ must be built by the same Bun as locally: bundle output differs between versions.
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 

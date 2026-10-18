@@ -151,6 +151,8 @@ bun run typecheck
 bun run build      # writes dist/, which must be committed; CI fails if it is stale
 ```
 
+Build with the Bun version in `package.json` (`packageManager`). Other versions bundle differently and CI will reject the result.
+
 ## Versioning
 
 Pin a major tag (`@v1`) or a full commit SHA. Breaking changes only ship in a new major version.

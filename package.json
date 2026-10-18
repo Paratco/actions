@@ -2,6 +2,7 @@
   "name": "paratco-actions",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.2",
   "scripts": {
     "build": "bun build src/artifact.ts src/cache/restore.ts src/cache/save.ts --target bun --outdir dist --root src",
     "typecheck": "tsc --noEmit"
