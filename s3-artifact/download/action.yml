@@ -1,0 +1,56 @@
+name: S3 Download Artifact
+description: Download build artifacts from any S3-compatible bucket. Mirrors actions/download-artifact.
+author: Paratco
+branding:
+  icon: download-cloud
+  color: blue
+
+inputs:
+  name:
+    description: Artifact to download. Empty downloads every artifact of the run (filtered by pattern).
+    required: false
+    default: ""
+  pattern:
+    description: Glob over artifact names, used when name is empty.
+    required: false
+    default: ""
+  path:
+    description: Destination directory.
+    required: false
+    default: ${{ github.workspace }}
+  merge-multiple:
+    description: Put every artifact's files directly into path instead of path/<name>/.
+    required: false
+    default: "false"
+  prefix:
+    description: Key prefix the artifacts were uploaded under. Must match the upload.
+    required: false
+    default: ${{ github.repository }}/${{ github.run_id }}
+  endpoint:
+    description: S3 endpoint URL including scheme, e.g. https://s3.example.com or http://minio:9000.
+    required: true
+  bucket:
+    description: Bucket name.
+    required: true
+  region:
+    description: Bucket region.
+    required: false
+    default: us-east-1
+  access-key-id:
+    description: Access key id.
+    required: true
+  secret-access-key:
+    description: Secret access key.
+    required: true
+  skip-tls-verify:
+    description: Skip TLS certificate verification (self-signed endpoints). Avoid on public networks.
+    required: false
+    default: "false"
+
+outputs:
+  download-path:
+    description: Absolute path the artifacts were downloaded to.
+
+runs:
+  using: node24
+  main: main.cjs

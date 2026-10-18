@@ -1,0 +1,33 @@
+name: Check dist
+
+# The actions run the committed dist/ bundles, not src/. Fail when they are out of date.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check-dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run typecheck
+
+      - run: bun run build
+
+      - name: dist/ matches src/
+        run: |
+          if ! git diff --exit-code -- dist; then
+            echo "::error::dist/ is out of date. Run 'bun run build' and commit the result."
+            exit 1
+          fi

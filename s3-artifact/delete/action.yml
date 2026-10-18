@@ -1,0 +1,52 @@
+name: S3 Delete Artifact
+description: Delete build artifacts of the current run from any S3-compatible bucket.
+author: Paratco
+branding:
+  icon: trash-2
+  color: blue
+
+inputs:
+  name:
+    description: Artifact to delete. Empty deletes every artifact of the run (filtered by pattern).
+    required: false
+    default: ""
+  pattern:
+    description: Glob over artifact names, used when name is empty.
+    required: false
+    default: ""
+  fail-on-error:
+    description: Fail when a named artifact does not exist.
+    required: false
+    default: "false"
+  prefix:
+    description: Key prefix the artifacts were uploaded under. Must match the upload.
+    required: false
+    default: ${{ github.repository }}/${{ github.run_id }}
+  endpoint:
+    description: S3 endpoint URL including scheme, e.g. https://s3.example.com or http://minio:9000.
+    required: true
+  bucket:
+    description: Bucket name.
+    required: true
+  region:
+    description: Bucket region.
+    required: false
+    default: us-east-1
+  access-key-id:
+    description: Access key id.
+    required: true
+  secret-access-key:
+    description: Secret access key.
+    required: true
+  skip-tls-verify:
+    description: Skip TLS certificate verification (self-signed endpoints). Avoid on public networks.
+    required: false
+    default: "false"
+
+outputs:
+  deleted:
+    description: Number of artifacts deleted.
+
+runs:
+  using: node24
+  main: main.cjs

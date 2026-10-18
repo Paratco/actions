@@ -1,0 +1,57 @@
+name: S3 Upload Artifact
+description: Upload a build artifact to any S3-compatible bucket. Mirrors actions/upload-artifact.
+author: Paratco
+branding:
+  icon: upload-cloud
+  color: blue
+
+inputs:
+  name:
+    description: Artifact name. Must not contain slashes.
+    required: false
+    default: artifact
+  path:
+    description: Files, directories or globs to upload, one per line. Prefix a line with ! to exclude.
+    required: true
+  if-no-files-found:
+    description: "What to do when no files match: warn, error or ignore."
+    required: false
+    default: warn
+  overwrite:
+    description: Replace an artifact of the same name in this run instead of failing.
+    required: false
+    default: "false"
+  prefix:
+    description: Key prefix for this run's artifacts. Keep it unique per workflow run.
+    required: false
+    default: ${{ github.repository }}/${{ github.run_id }}
+  endpoint:
+    description: S3 endpoint URL including scheme, e.g. https://s3.example.com or http://minio:9000.
+    required: true
+  bucket:
+    description: Bucket name.
+    required: true
+  region:
+    description: Bucket region.
+    required: false
+    default: us-east-1
+  access-key-id:
+    description: Access key id.
+    required: true
+  secret-access-key:
+    description: Secret access key.
+    required: true
+  skip-tls-verify:
+    description: Skip TLS certificate verification (self-signed endpoints). Avoid on public networks.
+    required: false
+    default: "false"
+
+outputs:
+  artifact-prefix:
+    description: Object key prefix the artifact was stored under.
+  artifact-size:
+    description: Total uploaded size in bytes.
+
+runs:
+  using: node24
+  main: main.cjs

@@ -1,0 +1,74 @@
+name: S3 Cache
+description: Cache dependencies and build outputs in any S3-compatible bucket. Mirrors actions/cache.
+author: Paratco
+branding:
+  icon: archive
+  color: blue
+
+inputs:
+  path:
+    description: Files, directories and wildcard patterns to cache and restore, one per line. ! excludes glob matches.
+    required: true
+  key:
+    description: Explicit key for restoring and saving the cache.
+    required: true
+  restore-keys:
+    description: Ordered list of key prefixes to restore from when key has no exact match.
+    required: false
+    default: ""
+  lookup-only:
+    description: Only check whether a cache entry exists; do not download it.
+    required: false
+    default: "false"
+  restore-only:
+    description: Restore the cache but never save it (like actions/cache/restore).
+    required: false
+    default: "false"
+  use-fallback:
+    description: Use GitHub's own cache service when the bucket is unreachable.
+    required: false
+    default: "true"
+  retry-count:
+    description: Retries for each S3 request. 0 disables retrying.
+    required: false
+    default: "3"
+  prefix:
+    description: Key prefix in the bucket. The default keeps each repository's caches apart.
+    required: false
+    default: ${{ github.repository }}
+  endpoint:
+    description: S3 endpoint URL including scheme, e.g. https://s3.example.com or http://minio:9000.
+    required: true
+  bucket:
+    description: Bucket name.
+    required: true
+  region:
+    description: Bucket region.
+    required: false
+    default: us-east-1
+  access-key-id:
+    description: Access key id.
+    required: true
+  secret-access-key:
+    description: Secret access key.
+    required: true
+  skip-tls-verify:
+    description: Skip TLS certificate verification (self-signed endpoints). Avoid on public networks.
+    required: false
+    default: "false"
+
+outputs:
+  cache-hit:
+    description: Whether an exact match was found for key.
+  cache-primary-key:
+    description: The key the cache will be saved under.
+  cache-matched-key:
+    description: Key of the cache entry that was restored, if any.
+  cache-size:
+    description: Size in bytes of the restored entry (S3 only).
+
+runs:
+  using: node24
+  main: main.cjs
+  post: post.cjs
+  post-if: success()
