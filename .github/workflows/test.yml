@@ -1,0 +1,168 @@
+name: Test
+
+# Smoke-tests the actions from this checkout against a throwaway MinIO.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  S3_ENDPOINT: http://127.0.0.1:9000
+  S3_BUCKET: test
+  S3_KEY: minioadmin
+  S3_SECRET: minioadmin
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # A service container cannot be given `server /data`, so start MinIO by hand.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER="$S3_KEY" -e MINIO_ROOT_PASSWORD="$S3_SECRET" \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            curl -sf "$S3_ENDPOINT/minio/health/live" && break
+            sleep 1
+          done
+          curl -sf --aws-sigv4 "aws:amz:us-east-1:s3" --user "$S3_KEY:$S3_SECRET" -X PUT "$S3_ENDPOINT/$S3_BUCKET"
+
+      - name: Create test files
+        run: |
+          mkdir -p data/sub cached/lib
+          head -c 30000000 /dev/urandom > data/big.bin
+          echo hello > data/sub/small.txt
+          head -c 20000000 /dev/urandom > cached/lib/big.a
+          echo one > cached/lib/version.txt
+          cp -r data data.orig
+          cp -r cached cached.orig
+
+      # ---- s3-artifact ----
+
+      - uses: ./s3-artifact/upload
+        id: upload
+        with:
+          name: test-artifact
+          path: data/
+          if-no-files-found: error
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - uses: ./s3-artifact/download
+        with:
+          name: test-artifact
+          path: downloaded
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - name: Artifact round trip is identical
+        run: |
+          test "${{ steps.upload.outputs.artifact-size }}" -gt 30000000
+          diff -r data.orig downloaded
+
+      - uses: ./s3-artifact/delete
+        id: delete
+        with:
+          name: test-artifact
+          fail-on-error: true
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - run: test "${{ steps.delete.outputs.deleted }}" = 1
+
+      # ---- s3-cache ----
+      # A cache is saved by the post step at the end of the job, too late to restore in the same
+      # job. So the first save is done by running the post entry point directly, the way the runner
+      # would, and the real post steps still run at the end (exact hit / already exists).
+
+      - uses: ./s3-cache
+        id: miss
+        with:
+          path: cached
+          key: test-cache-${{ github.run_id }}-a
+          restore-keys: test-cache-${{ github.run_id }}-
+          use-fallback: false
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - run: test "${{ steps.miss.outputs.cache-hit }}" = false && test -z "${{ steps.miss.outputs.cache-matched-key }}"
+
+      - name: Save (post step, run directly)
+        run: node s3-cache/post.cjs
+        env:
+          INPUT_PATH: cached
+          INPUT_KEY: test-cache-${{ github.run_id }}-a
+          INPUT_PREFIX: ${{ github.repository }}
+          INPUT_USE-FALLBACK: "false"
+          INPUT_RETRY-COUNT: "3"
+          INPUT_ENDPOINT: ${{ env.S3_ENDPOINT }}
+          INPUT_BUCKET: ${{ env.S3_BUCKET }}
+          INPUT_ACCESS-KEY-ID: ${{ env.S3_KEY }}
+          INPUT_SECRET-ACCESS-KEY: ${{ env.S3_SECRET }}
+          STATE_primary-key: test-cache-${{ github.run_id }}-a
+
+      - run: rm -rf cached
+
+      - uses: ./s3-cache
+        id: exact
+        with:
+          path: cached
+          key: test-cache-${{ github.run_id }}-a
+          use-fallback: false
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - name: Exact hit restores identical files
+        run: |
+          test "${{ steps.exact.outputs.cache-hit }}" = true
+          diff -r cached.orig cached
+
+      - run: rm -rf cached
+
+      - uses: ./s3-cache
+        id: partial
+        with:
+          path: cached
+          key: test-cache-${{ github.run_id }}-b
+          restore-keys: test-cache-${{ github.run_id }}-
+          use-fallback: false
+          endpoint: ${{ env.S3_ENDPOINT }}
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - name: Restore-keys hit restores identical files
+        run: |
+          test "${{ steps.partial.outputs.cache-hit }}" = false
+          test "${{ steps.partial.outputs.cache-matched-key }}" = "test-cache-${{ github.run_id }}-a"
+          diff -r cached.orig cached
+
+      - uses: ./s3-cache
+        id: unreachable
+        with:
+          path: cached
+          key: test-cache-${{ github.run_id }}-a
+          use-fallback: false
+          retry-count: 0
+          endpoint: http://127.0.0.1:9
+          bucket: ${{ env.S3_BUCKET }}
+          access-key-id: ${{ env.S3_KEY }}
+          secret-access-key: ${{ env.S3_SECRET }}
+
+      - run: test "${{ steps.unreachable.outputs.cache-hit }}" = false
