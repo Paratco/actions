@@ -1,6 +1,6 @@
 name: Test
 
-# Smoke-tests the actions from this checkout against a throwaway S3 server (adobe/s3mock).
+# Smoke-tests the actions from this checkout against a throwaway S3 server (RustFS).
 on:
   push:
     branches: [main]
@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 env:
-  S3_ENDPOINT: http://127.0.0.1:9090
+  S3_ENDPOINT: http://127.0.0.1:9000
   S3_BUCKET: test
-  S3_KEY: test
-  S3_SECRET: test
+  S3_KEY: rustfsadmin
+  S3_SECRET: rustfsadmin
 
 jobs:
   test:
@@ -21,16 +21,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # MinIO images now need a registry login; s3mock is S3-compatible (multipart included), accepts any
-      # credentials and creates the bucket from an env var.
+      # RustFS: S3-compatible and published on Docker Hub (MinIO images now need a registry login).
+      # Credentials are the defaults, set explicitly; the bucket is created through the S3 API.
       - name: Start S3 server
         run: |
-          docker run -d --name s3 -p 9090:9090 \
-            -e COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS="$S3_BUCKET" \
-            -e initialBuckets="$S3_BUCKET" \
-            adobe/s3mock
+          docker run -d --name s3 -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY="$S3_KEY" -e RUSTFS_SECRET_KEY="$S3_SECRET" \
+            rustfs/rustfs:1.0.3
           for i in $(seq 1 60); do
-            curl -sf "$S3_ENDPOINT/$S3_BUCKET?list-type=2" >/dev/null && exit 0
+            if curl -sf --aws-sigv4 "aws:amz:us-east-1:s3" --user "$S3_KEY:$S3_SECRET" -X PUT "$S3_ENDPOINT/$S3_BUCKET" >/dev/null; then
+              exit 0
+            fi
             sleep 1
           done
           docker logs s3
